@@ -1,6 +1,6 @@
 # parky-scraper
 
-Scrapes grocery prices from JS-rendered e-shops and classifies products with Qwen over Ollama API.
+Scrapes publicly accessible, JavaScript-rendered grocery product pages from kosik.sk with Crawl4AI and optionally classifies product names with the existing Qwen/Ollama integration.
 
 ## Installation
 
@@ -10,73 +10,69 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Environment setup
+For live Crawl4AI use, install its browser dependencies as described by the Crawl4AI release installed in your environment.
 
-1. Copy example env file:
+## Environment configuration
 
-```bash
-cp .env.example .env
+Copy `.env.example` to `.env`. The scraper settings are non-secret:
+
+```dotenv
+SCRAPER_USER_AGENT=Mozilla/5.0
+SCRAPER_REQUEST_DELAY_SECONDS=2
+SCRAPER_PAGE_TIMEOUT_SECONDS=60
+CLASSIFICATION_ENABLED=false
+CLASSIFICATION_CONFIDENCE_THRESHOLD=0.75
 ```
 
-2. Fill values in `.env`:
-- `OLLAMA_BASE_URL` (e.g. `https://nucaa.fei.stuba.sk:8082/ollama`)
-- `OLLAMA_API_KEY` (token, nikdy ho necommituj)
-- `OLLAMA_MODEL` (`qwen3:30b`)
-- `CLASSIFICATION_CONFIDENCE_THRESHOLD` (default `0.75`)
+Classification additionally uses the existing Ollama variables (`OLLAMA_BASE_URL`, `OLLAMA_API_KEY`, and `OLLAMA_MODEL`) from the local environment. Never commit or print those values.
 
-## Run CLI
+## Run the scraper
 
 ```bash
-python -m qwen_classifier.cli \
-  --products "K-Classic Dušená šunka výberová 100 g" "Coca-Cola 1,5 l" \
-  --output qwen_classifier/output/classification.json \
-  --mark-needs-review
+python -m scraper.cli \
+  --url "https://www.kosik.sk/p39112-citrony" \
+  --url "https://www.kosik.sk/p1952-mccain-golden-longs-hranolky" \
+  --url "https://www.kosik.sk/p6902-tauris-zipser-parky-71-maesa" \
+  --output output/products.json \
+  --classify
 ```
 
-## Expected JSON output
+`--url` can be repeated. `--classify` is optional and requires the Ollama configuration. The final array is written to the requested path; the raw, unclassified array is written beside it as `products.raw.json`. The CLI prints only a count and output path.
+
+Example product output:
 
 ```json
 [
   {
-    "name": "K-Classic Dušená šunka výberová 100 g",
-    "category": "masove_vyrobky",
-    "subcategory": "sunka",
-    "confidence": 0.98,
+    "retailer": "Kosik",
+    "url": "https://www.kosik.sk/product/example",
+    "scraped_at": "2026-10-20T00:00:00Z",
+    "raw_title": "K-Classic Mlieko plnotucne 1 l",
+    "price": 0.89,
+    "regular_price": 1.09,
+    "price_per_unit": 0.89,
+    "unit": "l",
+    "weight_or_volume": "1 l",
+    "is_discounted": true,
+    "availability": "Na sklade",
+    "category": "mliecne_vyrobky",
+    "subcategory": "mlieko",
+    "confidence": 0.9,
     "needs_review": false
   }
 ]
 ```
 
-## Manual integration test
+## Classification integration
+
+`ScrapingPipeline` accepts a classifier implementing the existing `QwenClassifier.classify()` interface. It sends the extracted `raw_title` as a one-item batch, then merges category, subcategory, confidence, and review status into the product model. This dependency is injected, so extraction and tests never call Ollama directly.
+
+## Tests
+
+The test suite uses only a local HTML fixture and mocked crawler/classifier objects:
 
 ```bash
-python -m qwen_classifier.cli \
-  --products \
-  "K-Classic Dušená šunka výberová 100 g" \
-  "Pilos Extra jemný tvaroh 250 g" \
-  "Coca-Cola 1,5 l" \
-  "Horká čokoláda Milka 100 g" \
-  "Mrazená zeleninová zmes Bonduelle 450 g" \
-  "Čerstvé banány 1 kg" \
-  "Pekárenský bagel sezamový 80 g" \
-  "Klasické párky Tesco 400 g" \
-  --output qwen_classifier/output/classification.json \
-  --mark-needs-review
+pytest
 ```
 
-## Integration with scraper
-
-When scraper output is a list of product objects, collect `raw_title` values and pass them to `QwenClassifier.classify`.
-
-Example flow:
-1. Read scraper results (list of dicts/objects).
-2. Build input list: `products = [item["raw_title"] for item in scraper_results]`.
-3. Call classifier: `classifier.classify(products, mark_needs_review=True)`.
-4. Persist returned list to JSON for downstream processing.
-
-## Troubleshooting
-
-- **Missing env variables**: ensure `.env` exists and contains all required keys.
-- **HTTP 401/403**: skontroluj hodnotu `OLLAMA_API_KEY` a prístup na endpoint
-- **Timeout**: verify network connectivity and Ollama server responsiveness.
-- **Validation errors**: inspect model JSON in `response` field, it must be strict JSON array.
+`python -m scraper.cli --help` is also available without network access. Live scraping is sequential, rate-limited, and limited to public pages; it does not bypass CAPTCHA, authentication, bot protection, rate limits, or robots restrictions. Selectors may require maintenance if Kosik changes its page markup.

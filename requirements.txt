@@ -2,3 +2,4 @@ httpx
 pydantic
 pytest
 python-dotenv
+crawl4ai
