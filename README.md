@@ -30,8 +30,8 @@ Classification additionally uses the existing Ollama variables (`OLLAMA_BASE_URL
 
 ```bash
 python -m scraper.cli \
-  --url "https://www.kosik.sk/product/..." \
-  --url "https://www.kosik.sk/product/another-product" \
+  --url "https://www.kosik.sk/p39112-citrony" \
+  --url "https://www.kosik.sk/p1952-mccain-golden-longs-hranolky" \
   --output output/products.json \
   --classify
 ```

@@ -18,7 +18,20 @@ class _TextParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = dict(attrs)
-        self.classes.append(f"{tag} {attrs_dict.get('class', '')} {attrs_dict.get('id', '')}".lower())
+        if tag in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}:
+            return
+        self.classes.append(
+            " ".join(
+                [
+                    tag,
+                    attrs_dict.get("class", "") or "",
+                    attrs_dict.get("id", "") or "",
+                    attrs_dict.get("data-tid", "") or "",
+                    attrs_dict.get("data-testid", "") or "",
+                    attrs_dict.get("aria-label", "") or "",
+                ]
+            ).lower()
+        )
 
     def handle_endtag(self, tag: str) -> None:
         if self.classes:
@@ -29,13 +42,22 @@ class _TextParser(HTMLParser):
         if not text:
             return
         self.parts.append(text)
-        self.current.append(" ".join(self.classes[-1:]) + "\t" + text)
+        self.current.append(" ".join(self.classes) + "\t" + text)
 
 
 def _fields(html: str) -> list[tuple[str, str]]:
     parser = _TextParser()
     parser.feed(html)
     return [tuple(item.split("\t", 1)) for item in parser.current if "\t" in item]
+
+
+def _meta(html: str, key: str) -> str | None:
+    pattern = re.compile(
+        rf"<meta[^>]+(?:property|name)=[\"'][^\"']*{re.escape(key)}[^\"']*[\"'][^>]+content=[\"']([^\"']+)",
+        re.IGNORECASE,
+    )
+    match = pattern.search(html)
+    return " ".join(match.group(1).split()) if match else None
 
 
 def _first_text(fields: list[tuple[str, str]], patterns: tuple[str, ...]) -> str | None:
@@ -61,21 +83,45 @@ def _unit(value: str | None) -> str | None:
 
 def extract_product(page_content: str, url: str) -> ScrapedProduct:
     fields = _fields(page_content)
-    title = _first_text(fields, ("product-title", "product_name", "product-name", "title"))
-    title = title or next((text for _, text in fields if len(text) > 3), "Unknown product")
-    current = _first_text(fields, ("price", "sale-price", "current-price"))
-    regular = _first_text(fields, ("regular-price", "old-price", "original-price"))
-    unit_price = _first_text(fields, ("price-per-unit", "unit-price", "priceperunit"))
-    weight = _first_text(fields, ("weight", "volume", "quantity", "size"))
-    availability = _first_text(fields, ("availability", "stock", "in-stock"))
+    title = _first_text(
+        fields,
+        (
+            "product-title",
+            "product_name",
+            "product-name",
+            "producttitle",
+            "product-detail__product-name",
+        ),
+    )
+    title = title or _meta(page_content, "og:title")
+    title = title or next((text for context, text in fields if context.startswith("h1 ")), "Unknown product")
+    current = _first_text(fields, ("pbox-price", "price", "sale-price", "current-price"))
+    regular = _first_text(
+        fields,
+        ("product-box__crossed-price", "regular-price", "old-price", "original-price"),
+    )
+    unit_price = _first_text(
+        fields,
+        ("pbox-price-per-unit", "price-per-unit", "unit-price", "priceperunit"),
+    )
+    weight = _first_text(
+        fields,
+        ("product-detail__product-weight", "weight", "volume", "quantity", "size"),
+    )
+    availability = _first_text(
+        fields,
+        ("availability", "stock", "in-stock", "product-to-cart__to-cart"),
+    )
+    brand = _first_text(fields, ("product-detail__main-info__info_brand",))
     price_value = _price(current)
     regular_value = _price(regular)
-    unit_value = _unit(weight or unit_price)
+    unit_value = _unit(unit_price) or _unit(weight)
     discounted = regular_value is not None and price_value is not None and regular_value > price_value
     return ScrapedProduct(
         url=url,
         scraped_at=datetime.now(timezone.utc),
         raw_title=title,
+        brand=brand,
         price=price_value,
         regular_price=regular_value,
         price_per_unit=_price(unit_price),
