@@ -67,6 +67,11 @@ def _first_text(fields: list[tuple[str, str]], patterns: tuple[str, ...]) -> str
     return None
 
 
+def _combined_text(fields: list[tuple[str, str]], patterns: tuple[str, ...]) -> str | None:
+    values = [text for context, text in fields if any(pattern in context for pattern in patterns)]
+    return " ".join(values) if values else None
+
+
 def _price(value: str | None) -> float | None:
     if value is None:
         return None
@@ -100,7 +105,7 @@ def extract_product(page_content: str, url: str) -> ScrapedProduct:
         fields,
         ("product-box__crossed-price", "regular-price", "old-price", "original-price"),
     )
-    unit_price = _first_text(
+    unit_price = _combined_text(
         fields,
         ("pbox-price-per-unit", "price-per-unit", "unit-price", "priceperunit"),
     )

@@ -39,7 +39,7 @@ def test_unit_comes_from_price_per_unit_before_product_size() -> None:
     <p data-tid="product-detail__product-weight">750 g</p>
     <section data-tid="pbox-price"><span>1,59</span></section>
     <s data-tid="product-box__crossed-price">2,89</s>
-    <div data-tid="pbox-price-per-unit">2,12 €/kg</div>
+    <div data-tid="pbox-price-per-unit"><span>2,12</span><span>€/kg</span></div>
     """
     product = extract_product(html, "https://www.kosik.sk/product/fries")
     assert product.unit == "kg"
