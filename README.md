@@ -32,6 +32,7 @@ Classification additionally uses the existing Ollama variables (`OLLAMA_BASE_URL
 python -m scraper.cli \
   --url "https://www.kosik.sk/p39112-citrony" \
   --url "https://www.kosik.sk/p1952-mccain-golden-longs-hranolky" \
+  --url "https://www.kosik.sk/p6902-tauris-zipser-parky-71-maesa" \
   --output output/products.json \
   --classify
 ```
